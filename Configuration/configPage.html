@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>Audio Tagger</title>
+</head>
+<body>
+    <div id="AudioTaggerConfigPage" data-role="page" class="page type-interior pluginConfigurationPage" data-require="emby-input,emby-button,emby-checkbox,emby-select">
+        <div data-role="content">
+            <div class="content-primary">
+                <form id="AudioTaggerConfigForm">
+                    <div class="sectionTitleContainer flex align-items-center">
+                        <h2 class="sectionTitle">Audio Tagger Configuration</h2>
+                    </div>
+                    
+                    <div class="checkboxContainer checkboxContainer-withDescription">
+                        <label>
+                            <input id="chkEnabled" type="checkbox" is="emby-checkbox" />
+                            <span>Enable Audio Tagger</span>
+                        </label>
+                        <div class="fieldDescription">
+                            When enabled, the plugin will automatically add audio format tags to movies when they are added or updated.
+                        </div>
+                    </div>
+
+                    <div class="checkboxContainer checkboxContainer-withDescription">
+                        <label>
+                            <input id="chkOnlyMultichannel" type="checkbox" is="emby-checkbox" />
+                            <span>Only tag multichannel audio (5.1+)</span>
+                        </label>
+                        <div class="fieldDescription">
+                            When enabled, stereo (2.0) and mono audio will be ignored. Only 5.1, 7.1, and higher channel counts will be tagged.
+                        </div>
+                    </div>
+
+                    <div class="inputContainer">
+                        <label class="inputLabel inputLabelUnfocused" for="txtMinChannels">Minimum Channels</label>
+                        <input id="txtMinChannels" type="number" is="emby-input" min="2" max="12" step="1" />
+                        <div class="fieldDescription">
+                            Minimum number of audio channels required to add tags (e.g., 6 for 5.1+, 2 for stereo+).
+                        </div>
+                    </div>
+
+                    <div class="inputContainer">
+                        <label class="inputLabel inputLabelUnfocused" for="txtLibraries">Monitored Libraries</label>
+                        <input id="txtLibraries" type="text" is="emby-input" />
+                        <div class="fieldDescription">
+                            Comma-separated list of library names to monitor (e.g., "Movies, Movies (4k)").
+                        </div>
+                    </div>
+
+                    <div class="checkboxContainer checkboxContainer-withDescription">
+                        <label>
+                            <input id="chkVerboseLogging" type="checkbox" is="emby-checkbox" />
+                            <span>Verbose Logging</span>
+                        </label>
+                        <div class="fieldDescription">
+                            Enable detailed logging for debugging purposes. This will log every audio stream analysis.
+                        </div>
+                    </div>
+
+                    <div>
+                        <button is="emby-button" type="submit" class="raised button-submit block">
+                            <span>Save</span>
+                        </button>
+                    </div>
+                </form>
+
+                <div class="sectionTitleContainer flex align-items-center" style="margin-top: 2em;">
+                    <h3 class="sectionTitle">Audio Tags Generated</h3>
+                </div>
+                <div class="fieldDescription">
+                    <p>This plugin automatically adds the following types of tags based on audio stream analysis:</p>
+                    <ul>
+                        <li><strong>Channel Layout:</strong> _5.1, _7.1, _7.1.2</li>
+                        <li><strong>Codecs:</strong> _AC3, _EAC3, _TrueHD, _DTS, _DTS-HD_MA, _LPCM, _Opus</li>
+                        <li><strong>Object Audio:</strong> _Atmos, _DTSX</li>
+                        <li><strong>Quality:</strong> _Lossless, _Lossy</li>
+                        <li><strong>Special:</strong> _IMAX</li>
+                    </ul>
+                    <p><strong>Example:</strong> A movie with 7.1 Dolby Atmos TrueHD would get tags: _7.1, _TrueHD, _Atmos, _Lossless</p>
+                </div>
+            </div>
+        </div>
+
+        <script type="text/javascript">
+            (function () {
+                var pluginId = "33fc255a-be9b-11ef-993c-272469e0c801";
+
+                document.querySelector('#AudioTaggerConfigPage')
+                    .addEventListener('pageshow', function () {
+                        Dashboard.showLoadingMsg();
+                        ApiClient.getPluginConfiguration(pluginId).then(function (config) {
+                            document.querySelector('#chkEnabled').checked = config.Enabled || false;
+                            document.querySelector('#chkOnlyMultichannel').checked = config.OnlyMultichannelAudio !== false;
+                            document.querySelector('#txtMinChannels').value = config.MinimumChannels || 6;
+                            document.querySelector('#txtLibraries').value = (config.MonitoredLibraries || ["Movies", "Movies (4k)"]).join(", ");
+                            document.querySelector('#chkVerboseLogging').checked = config.VerboseLogging || false;
+                            Dashboard.hideLoadingMsg();
+                        });
+                    });
+
+                document.querySelector('#AudioTaggerConfigForm').addEventListener('submit', function (e) {
+                    Dashboard.showLoadingMsg();
+                    e.preventDefault();
+
+                    var config = {
+                        Enabled: document.querySelector('#chkEnabled').checked,
+                        OnlyMultichannelAudio: document.querySelector('#chkOnlyMultichannel').checked,
+                        MinimumChannels: parseInt(document.querySelector('#txtMinChannels').value) || 6,
+                        MonitoredLibraries: document.querySelector('#txtLibraries').value.split(',').map(function(s) { return s.trim(); }).filter(function(s) { return s; }),
+                        VerboseLogging: document.querySelector('#chkVerboseLogging').checked
+                    };
+
+                    ApiClient.updatePluginConfiguration(pluginId, config).then(function () {
+                        Dashboard.processPluginConfigurationUpdateResult();
+                    });
+
+                    return false;
+                });
+            })();
+        </script>
+    </div>
+</body>
+</html>
