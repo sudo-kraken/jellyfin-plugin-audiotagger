@@ -22,8 +22,16 @@ if %ERRORLEVEL% neq 0 (
 
 REM Create release package
 echo Creating release package...
+
+REM Extract version from meta.json
+for /f "tokens=2 delims=:, " %%i in ('findstr "version" meta.json') do (
+    set "VERSION=%%i"
+)
+REM Remove quotes from version
+set "VERSION=%VERSION:"=%"
+
 set "OUTPUT_DIR=bin\Release\net8.0"
-set "PACKAGE_DIR=jellyfin-plugin-audiotagger_1.0.0.0"
+set "PACKAGE_DIR=jellyfin-plugin-audiotagger_%VERSION%"
 
 if exist "%PACKAGE_DIR%" rmdir /s /q "%PACKAGE_DIR%"
 mkdir "%PACKAGE_DIR%"
