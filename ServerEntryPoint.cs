@@ -92,6 +92,41 @@ public class ServerEntryPoint : IHostedService
     }
 
     /// <summary>
+    /// Checks if a library name is in the monitored libraries list with flexible matching.
+    /// </summary>
+    /// <param name="libraryName">The library name to check.</param>
+    /// <param name="monitoredLibraries">The list of monitored library names.</param>
+    /// <returns>True if the library is monitored, false otherwise.</returns>
+    private static bool IsLibraryMonitored(string libraryName, IList<string> monitoredLibraries)
+    {
+        if (string.IsNullOrWhiteSpace(libraryName) || monitoredLibraries == null || !monitoredLibraries.Any())
+        {
+            return false;
+        }
+
+        // Normalize the library name for comparison
+        var normalizedLibraryName = libraryName.Trim();
+
+        // Check for exact match first (case-insensitive and trimmed)
+        foreach (var monitoredLibrary in monitoredLibraries)
+        {
+            if (string.IsNullOrWhiteSpace(monitoredLibrary))
+            {
+                continue;
+            }
+
+            var normalizedMonitoredLibrary = monitoredLibrary.Trim();
+            
+            if (string.Equals(normalizedLibraryName, normalizedMonitoredLibrary, StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>
     /// Processes a movie for audio tagging.
     /// </summary>
     /// <param name="movie">The movie to process.</param>
@@ -108,11 +143,12 @@ public class ServerEntryPoint : IHostedService
 
             // Check if this movie is in a monitored library
             var libraryName = movie.GetParent()?.Name;
-            if (libraryName != null && !config.MonitoredLibraries.Contains(libraryName))
+            if (libraryName != null && !IsLibraryMonitored(libraryName, config.MonitoredLibraries))
             {
                 if (config.VerboseLogging)
                 {
-                    _logger.LogDebug("Skipping movie {MovieName} in unmonitored library: {LibraryName}", movie.Name, libraryName);
+                    _logger.LogDebug("Skipping movie {MovieName} in unmonitored library: {LibraryName}. Monitored libraries: {MonitoredLibraries}", 
+                        movie.Name, libraryName, string.Join(", ", config.MonitoredLibraries));
                 }
                 return;
             }
