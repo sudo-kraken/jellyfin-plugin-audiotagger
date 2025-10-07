@@ -8,11 +8,11 @@ An automatic audio tagging plugin for Jellyfin that analyzes movie audio streams
 
 ## Features
 
-- 🎬 **Automatic Processing**: Tags movies when added or updated
-- 🔊 **Smart Analysis**: Analyzes all audio streams in each movie
-- 🏷️ **Comprehensive Tags**: Channel layout, codec, quality, and special format tags
-- ⚙️ **Configurable**: Choose which libraries to monitor and minimum channel requirements
-- 🛡️ **Safe**: Only adds tags, never modifies other metadata
+- **Automatic Processing**: Tags movies when added or updated
+- **Smart Analysis**: Analyzes all audio streams in each movie
+- **Comprehensive Tags**: Channel layout, codec, quality, and special format tags
+- **Configurable**: Choose which libraries to monitor and minimum channel requirements
+- **Safe**: Only adds tags, never modifies other metadata
 
 ## Generated Tags
 
