@@ -1,8 +1,6 @@
 {
   "name": "jellyfin-plugin-audiotagger",
-  "build": {
-    "dockerfile": "Dockerfile"
-  },
+  "build": { "dockerfile": "Dockerfile" },
   "features": {
     "ghcr.io/devcontainers/features/common-utils:2": {},
     "ghcr.io/devcontainers/features/github-cli:1": {},
