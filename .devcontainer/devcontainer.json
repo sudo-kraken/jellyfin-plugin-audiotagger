@@ -1,36 +1,39 @@
 {
-  "name": "Jellyfin Plugin AudioTagger",
-  "image": "mcr.microsoft.com/devcontainers/dotnet:1-8.0-bookworm",
-
+  "name": "jellyfin-plugin-audiotagger",
+  "build": { "dockerfile": "Dockerfile" },
   "features": {
-    // renovate: datasource=github-tags depName=devcontainers/features/github-cli
-    "ghcr.io/devcontainers/features/github-cli": "1.0.13"
+    "ghcr.io/devcontainers/features/common-utils:2": {},
+    "ghcr.io/devcontainers/features/github-cli:1": {},
+    "ghcr.io/devcontainers/features/dotnet:1": { "version": "9.0" },
+    "ghcr.io/devcontainers/features/docker-outside-of-docker:1": {}
   },
-
+  "remoteUser": "vscode",
+  "containerEnv": {
+    "DOTNET_SKIP_FIRST_TIME_EXPERIENCE": "1",
+    "DOTNET_CLI_TELEMETRY_OPTOUT": "1",
+    "DOTNET_NOLOGO": "1"
+  },
   "customizations": {
     "vscode": {
       "extensions": [
-        "ms-dotnettools.csdevkit",
         "ms-dotnettools.csharp",
-        "ms-dotnettools.vscode-dotnet-runtime",
-        "editorconfig.editorconfig",
-        "github.vscode-github-actions",
-        "github.vscode-pull-request-github",
-        "eamodio.gitlens"
+        "GitHub.vscode-github-actions",
+        "ms-azuretools.vscode-docker",
+        "redhat.vscode-yaml",
+        "timonwong.shellcheck",
+        "foxundermoon.shell-format",
+        "EditorConfig.EditorConfig"
       ],
       "settings": {
-        "dotnet.server.useOmnisharp": false,
-        "editor.formatOnSave": true,
-        "editor.codeActionsOnSave": {
-          "source.organizeImports": "explicit"
-        },
+        "files.eol": "\n",
         "files.trimTrailingWhitespace": true,
         "files.insertFinalNewline": true
       }
     }
   },
-
-  "postCreateCommand": "dotnet restore",
-
-  "remoteUser": "vscode"
+  "mounts": [
+    "source=/var/run/docker.sock,target=/var/run/docker.sock,type=bind"
+  ],
+  "postCreateCommand": "sudo mkdir -p /home/vscode/.dotnet/tools /home/vscode/.nuget && sudo chown -R vscode:vscode /home/vscode/.dotnet /home/vscode/.nuget",
+  "postStartCommand": "dotnet --info >/dev/null || true"
 }

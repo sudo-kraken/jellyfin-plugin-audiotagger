@@ -1,0 +1,56 @@
+# yaml-language-server: $schema=https://json.schemastore.org/github-workflow.json
+name: Devcontainer Smoke Test
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+concurrency:
+  group: devcontainer-smoke-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  smoke:
+    name: Smoke Test Dev Container
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Build devcontainer
+        uses: devcontainers/ci@v0.3
+        with:
+          push: never
+          runCmd: echo "container up"
+
+      - name: Verify inside devcontainer
+        uses: devcontainers/ci@v0.3
+        with:
+          push: never
+          runCmd: |
+            bash -lc '
+              set -euo pipefail
+              id -un | grep -qx vscode
+      
+              # ensure mounted volumes are writable
+              sudo mkdir -p /home/vscode/.dotnet/tools /home/vscode/.nuget
+              sudo chown -R vscode:vscode /home/vscode/.dotnet /home/vscode/.nuget
+      
+              command -v dotnet >/dev/null
+              dotnet --info >/dev/null
+              dotnet restore
+              dotnet build --configuration Release
+      
+              if [ -S /var/run/docker.sock ]; then
+                docker version >/dev/null 2>&1 || true
+                docker ps >/dev/null 2>&1 || true
+                echo "Docker socket present"
+              else
+                echo "No Docker socket, skipping daemon checks"
+              fi
+      
+              echo "OK: devcontainer is healthy"
+            '
