@@ -1,36 +1,45 @@
 {
-  "name": "Jellyfin Plugin AudioTagger",
-  "image": "mcr.microsoft.com/devcontainers/dotnet:1-8.0-bookworm",
-
-  "features": {
-    // renovate: datasource=github-tags depName=devcontainers/features/github-cli
-    "ghcr.io/devcontainers/features/github-cli": "1.0.13"
+  "name": "jellyfin-plugin-audiotagger",
+  "build": {
+    "dockerfile": "Dockerfile"
   },
-
+  "features": {
+    "ghcr.io/devcontainers/features/common-utils:2": {},
+    "ghcr.io/devcontainers/features/github-cli:1": {},
+    "ghcr.io/devcontainers/features/dotnet:1": {
+      "version": "8.0"
+    },
+    "ghcr.io/devcontainers/features/docker-outside-of-docker:1": {}
+  },
   "customizations": {
     "vscode": {
       "extensions": [
         "ms-dotnettools.csdevkit",
         "ms-dotnettools.csharp",
-        "ms-dotnettools.vscode-dotnet-runtime",
-        "editorconfig.editorconfig",
         "github.vscode-github-actions",
-        "github.vscode-pull-request-github",
+        "ms-azuretools.vscode-docker",
+        "redhat.vscode-yaml",
+        "timonwong.shellcheck",
+        "foxundermoon.shell-format",
+        "EditorConfig.EditorConfig",
         "eamodio.gitlens"
       ],
       "settings": {
-        "dotnet.server.useOmnisharp": false,
         "editor.formatOnSave": true,
-        "editor.codeActionsOnSave": {
-          "source.organizeImports": "explicit"
-        },
+        "files.eol": "\n",
+        "files.insertFinalNewline": true,
         "files.trimTrailingWhitespace": true,
-        "files.insertFinalNewline": true
+        "dotnet.defaultSolution": "",
+        "dotnet.server.useOmnisharp": false
       }
     }
   },
-
-  "postCreateCommand": "dotnet restore",
-
-  "remoteUser": "vscode"
+  "containerEnv": {
+    "DOTNET_CLI_TELEMETRY_OPTOUT": "1"
+  },
+  "mounts": [
+    "source=/var/run/docker.sock,target=/var/run/docker.sock,type=bind"
+  ],
+  "remoteUser": "vscode",
+  "postCreateCommand": "bash -lc 'dotnet restore && if [ -f .pre-commit-config.yaml ]; then pre-commit install -t pre-commit -t commit-msg || true; fi'"
 }
