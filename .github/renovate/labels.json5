@@ -1,0 +1,38 @@
+{
+  $schema: "https://docs.renovatebot.com/renovate-schema.json",
+
+  packageRules: [
+    {
+      matchManagers: ["github-actions"],
+      addLabels: ["renovate/github_actions"],
+    },
+    {
+      matchDatasources: ["github-tags"],
+      addLabels: ["renovate/github-tags"],
+    },
+    {
+      matchDatasources: ["github-releases"],
+      addLabels: ["renovate/github-releases"],
+    },
+    {
+      matchManagers: ["nuget"],
+      addLabels: ["renovate/nuget"],
+    },
+    {
+      matchUpdateTypes: ["major"],
+      labels: ["type/major"],
+    },
+    {
+      matchUpdateTypes: ["minor"],
+      labels: ["type/minor"],
+    },
+    {
+      matchUpdateTypes: ["patch"],
+      labels: ["type/patch"],
+    },
+    {
+      matchUpdateTypes: ["digest"],
+      labels: ["type/digest"],
+    },
+  ],
+}

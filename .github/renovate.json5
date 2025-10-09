@@ -1,0 +1,51 @@
+{
+  $schema: "https://docs.renovatebot.com/renovate-schema.json",
+  description: "Automated dependency updates for jellyfin-plugin-audiotagger",
+  extends: [
+    "config:recommended",
+    ":automergePr",
+    ":automergePatch",
+    ":automergeDigest",
+    ":disableRateLimiting",
+    ":dependencyDashboard",
+    ":semanticCommits",
+    ":timezone(Europe/London)",
+    "github>sudo-kraken/jellyfin-plugin-audiotagger//.github/renovate/labels.json5",
+    "github>sudo-kraken/jellyfin-plugin-audiotagger//.github/renovate/devcontainers.json5",
+    "github>sudo-kraken/jellyfin-plugin-audiotagger//.github/renovate/semantic_commits.json5",
+  ],
+  dependencyDashboardTitle: "Renovate Dashboard 🤖",
+  suppressNotifications: ["prEditedNotification", "prIgnoreNotification"],
+  rebaseWhen: "conflicted",
+  prConcurrentLimit: 5,
+  labels: ["dependencies"],
+  minimumReleaseAge: "3 days",
+
+  packageRules: [
+    {
+      matchManagers: ["github-actions"],
+      minimumReleaseAge: null,
+    },
+    {
+      matchManagers: ["nuget"],
+      matchUpdateTypes: ["patch"],
+    },
+    {
+      matchManagers: ["nuget"],
+      matchUpdateTypes: ["minor"],
+      automerge: false
+    },
+    {
+      matchManagers: ["nuget"],
+      matchUpdateTypes: ["major"],
+      automerge: false,
+      minimumReleaseAge: "7 days"
+    },
+    {
+      matchManagers: ["nuget"],
+      matchPackagePatterns: ["^Jellyfin\\."],
+      groupName: "Jellyfin packages",
+      automerge: false
+    }
+  ]
+}

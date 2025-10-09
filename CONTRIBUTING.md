@@ -1,59 +1,38 @@
-# Contributing to Jellyfin Audio Tagger Plugin
+# How to contribute
 
-Thank you for your interest in contributing to the Jellyfin Audio Tagger Plugin!
+**First:** if you're unsure or afraid of _anything_, ask for help! You can
+submit a work in progress (WIP) pull request, or file an issue with the parts
+you know. We'll do our best to guide you in the right direction, and let you
+know if there are guidelines we will need to follow. We want people to be able
+to participate without fear of doing the wrong thing.
 
-## Development Setup
+## Commit message conventions
 
-1. Clone the repository:
-   ```bash
-   git clone https://github.com/sudo-kraken/jellyfin-plugin-audiotagger.git
-   cd jellyfin-plugin-audiotagger
-   ```
+We expect that all commit messages follow the
+[Conventional Commits](https://www.conventionalcommits.org/) specification.
+Please use the `feat`, `fix` or `chore` types for your commits.
 
-2. Install .NET 8.0 SDK from [Microsoft's website](https://dotnet.microsoft.com/download/dotnet/8.0)
+### Developer Certificate of Origin
 
-3. Build the project:
-   ```bash
-   dotnet build --configuration Release
-   ```
+In order for a code change to be accepted, you'll also have to accept the
+Developer Certificate of Origin (DCO).
+It's very lightweight, and you can find it [here](https://developercertificate.org).
+Accepting is accomplished by signing off on your commits, you can do this by
+adding a `Signed-off-by` line to your commit message, like here:
 
-## Testing
+```commit
+feat: add support for the XXXX operation
 
-1. Create a test library in Jellyfin with 1-2 movies
-2. Configure the plugin to only monitor your test library
-3. Install the plugin (starts disabled by default)
-4. Enable via Dashboard → Plugins → Audio Tagger
-5. Test on your sample movies
+Signed-off-by: Random Developer <random@developer.example.org>
+```
 
-## Code Style
+Please use your real name and a valid email address.
 
-- Follow C# naming conventions
-- Add XML documentation for public methods
-- Include error handling with appropriate logging
-- Write unit tests for new features
+## Submitting changes
 
-## Pull Requests
+Please create a new PR against the `main` branch which must be based on the
+project's [pull request template](.github/PULL_REQUEST_TEMPLATE.md).
 
-1. Fork the repository
-2. Create a feature branch: `git checkout -b feature/your-feature`
-3. Make your changes
-4. Test thoroughly
-5. Submit a pull request with a clear description
-
-## Reporting Issues
-
-Please include:
-- Jellyfin version
-- Plugin version
-- Steps to reproduce
-- Expected vs actual behavior
-- Relevant log entries (with verbose logging enabled)
-
-## Feature Requests
-
-Open an issue with:
-- Clear description of the requested feature
-- Use case/rationale
-- Proposed implementation (if you have ideas)
-
-Thank you for contributing!
+We usually squash all PRs commits on merge, and use the PR title as the commit
+message. Therefore, the PR title should follow the
+[Conventional Commits](https://www.conventionalcommits.org/) specification as well.

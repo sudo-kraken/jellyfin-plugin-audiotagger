@@ -1,0 +1,36 @@
+{
+  "name": "Jellyfin Plugin AudioTagger",
+  "image": "mcr.microsoft.com/devcontainers/dotnet:1-8.0-bookworm",
+
+  "features": {
+    // renovate: datasource=github-tags depName=devcontainers/features/github-cli
+    "ghcr.io/devcontainers/features/github-cli": "1.0.13"
+  },
+
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "ms-dotnettools.csdevkit",
+        "ms-dotnettools.csharp",
+        "ms-dotnettools.vscode-dotnet-runtime",
+        "editorconfig.editorconfig",
+        "github.vscode-github-actions",
+        "github.vscode-pull-request-github",
+        "eamodio.gitlens"
+      ],
+      "settings": {
+        "dotnet.server.useOmnisharp": false,
+        "editor.formatOnSave": true,
+        "editor.codeActionsOnSave": {
+          "source.organizeImports": "explicit"
+        },
+        "files.trimTrailingWhitespace": true,
+        "files.insertFinalNewline": true
+      }
+    }
+  },
+
+  "postCreateCommand": "dotnet restore",
+
+  "remoteUser": "vscode"
+}
