@@ -1,4 +1,4 @@
-FROM mcr.microsoft.com/devcontainers/dotnet:1-8.0-ubuntu-24.04
+FROM mcr.microsoft.com/devcontainers/dotnet:1-8.0-noble
 
 ENV DEBIAN_FRONTEND=noninteractive
 
