@@ -20,14 +20,22 @@
         "editor.formatOnSave": true,
         "files.eol": "\n",
         "files.insertFinalNewline": true,
-        "files.trimTrailingWhitespace": true,
-        "dotnet.server.useOmnisharp": false
+        "files.trimTrailingWhitespace": true
       }
     }
   },
   "mounts": [
-    "source=/var/run/docker.sock,target=/var/run/docker.sock,type=bind"
+    "source=/var/run/docker.sock,target=/var/run/docker.sock,type=bind",
+    "source=nuget-cache,target=/home/vscode/.nuget/packages,type=volume",
+    "source=dotnet-tools,target=/home/vscode/.dotnet/tools,type=volume"
   ],
+  "containerEnv": {
+    "PATH": "/home/vscode/.dotnet/tools:${PATH}"
+  },
   "remoteUser": "vscode",
-  "postCreateCommand": "bash -lc 'dotnet restore'"
+  "postCreateCommand": "bash -lc 'git config --global core.editor \"code --wait\"; dotnet --info; dotnet restore || true'",
+  "hostRequirements": {
+    "cpus": 2,
+    "memory": "2gb"
+  }
 }
