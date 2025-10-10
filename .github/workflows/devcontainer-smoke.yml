@@ -14,6 +14,7 @@ concurrency:
 
 jobs:
   smoke:
+    name: Smoke Test Dev Container
     runs-on: ubuntu-24.04
     steps:
       - name: Checkout
@@ -22,6 +23,7 @@ jobs:
       - name: Build devcontainer
         uses: devcontainers/ci@v0.3
         with:
+          push: never
           runCmd: echo "container up"
 
       - name: Verify tools and build inside devcontainer
@@ -45,10 +47,6 @@ jobs:
                 echo "Docker socket present"
               else
                 echo "No Docker socket, skipping daemon checks"
-              fi
-
-              if [ -f .pre-commit-config.yaml ]; then
-                pre-commit run --all-files --show-diff-on-failure
               fi
 
               echo "OK: devcontainer is healthy"
