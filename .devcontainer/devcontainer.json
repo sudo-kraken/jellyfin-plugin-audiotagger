@@ -29,5 +29,5 @@
     "source=/var/run/docker.sock,target=/var/run/docker.sock,type=bind"
   ],
   "remoteUser": "vscode",
-  "postCreateCommand": "bash -lc 'dotnet restore && if [ -f .pre-commit-config.yaml ]; then pre-commit install -t pre-commit -t commit-msg || true; fi'"
+  "postCreateCommand": "bash -lc 'dotnet restore'"
 }
