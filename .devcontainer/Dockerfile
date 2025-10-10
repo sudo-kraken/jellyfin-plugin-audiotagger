@@ -1,4 +1,4 @@
-FROM mcr.microsoft.com/devcontainers/dotnet:1-8.0-noble
+FROM mcr.microsoft.com/devcontainers/dotnet:9.0-noble
 
 ENV DEBIAN_FRONTEND=noninteractive
 
