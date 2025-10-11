@@ -1,0 +1,27 @@
+{
+  $schema: "https://docs.renovatebot.com/renovate-schema.json",
+
+  packageRules: [
+    {
+      matchManagers: ["nuget"],
+      matchUpdateTypes: ["patch"],
+    },
+    {
+      matchManagers: ["nuget"],
+      matchUpdateTypes: ["minor"],
+      automerge: false,
+    },
+    {
+      matchManagers: ["nuget"],
+      matchUpdateTypes: ["major"],
+      automerge: false,
+      minimumReleaseAge: "7 days",
+    },
+    {
+      matchManagers: ["nuget"],
+      matchPackagePatterns: ["^Jellyfin\\."],
+      groupName: "Jellyfin packages",
+      automerge: false,
+    },
+  ],
+}
