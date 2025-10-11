@@ -15,7 +15,7 @@
     "github>sudo-kraken/jellyfin-plugin-audiotagger//.github/renovate/devcontainers.json5",
     "github>sudo-kraken/jellyfin-plugin-audiotagger//.github/renovate/labels.json5",
     "github>sudo-kraken/jellyfin-plugin-audiotagger//.github/renovate/nuget.json5",
-    "github>sudo-kraken/jellyfin-plugin-audiotagger//.github/renovate/semantic_commits.json5",
+    "github>sudo-kraken/jellyfin-plugin-audiotagger//.github/renovate/semanticCommits.json5",
   ],
   dependencyDashboardTitle: "Renovate Dashboard 🤖",
   suppressNotifications: ["prEditedNotification", "prIgnoreNotification"],
