@@ -1,0 +1,101 @@
+# yaml-language-server: $schema=https://json.schemastore.org/github-workflow.json
+name: Jellyfin Compatibility
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: jellyfin-compatibility-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  stable:
+    name: Jellyfin ${{ matrix.server }} (${{ matrix.framework }})
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { server: "10.10.6", package: "10.10.6", framework: net8.0, sdk: "8.0.x", hosting: "8.0.1" }
+          - { server: "10.10.7", package: "10.10.7", framework: net8.0, sdk: "8.0.x", hosting: "8.0.1" }
+          - { server: "10.11.0", package: "10.11.0", framework: net9.0, sdk: "9.0.x", hosting: "9.0.10" }
+          # Jellyfin did not publish 10.11.1 Controller/Model packages.
+          - { server: "10.11.1", package: "10.11.0", framework: net9.0, sdk: "9.0.x", hosting: "9.0.10" }
+          - { server: "10.11.2", package: "10.11.2", framework: net9.0, sdk: "9.0.x", hosting: "9.0.10" }
+          - { server: "10.11.3", package: "10.11.3", framework: net9.0, sdk: "9.0.x", hosting: "9.0.10" }
+          - { server: "10.11.4", package: "10.11.4", framework: net9.0, sdk: "9.0.x", hosting: "9.0.10" }
+          - { server: "10.11.5", package: "10.11.5", framework: net9.0, sdk: "9.0.x", hosting: "9.0.10" }
+          - { server: "10.11.6", package: "10.11.6", framework: net9.0, sdk: "9.0.x", hosting: "9.0.11" }
+          - { server: "10.11.7", package: "10.11.7", framework: net9.0, sdk: "9.0.x", hosting: "9.0.11" }
+          - { server: "10.11.8", package: "10.11.8", framework: net9.0, sdk: "9.0.x", hosting: "9.0.11" }
+          - { server: "10.11.9", package: "10.11.9", framework: net9.0, sdk: "9.0.x", hosting: "9.0.11" }
+          - { server: "10.11.10", package: "10.11.10", framework: net9.0, sdk: "9.0.x", hosting: "9.0.11" }
+          - { server: "10.11.11", package: "10.11.11", framework: net9.0, sdk: "9.0.x", hosting: "9.0.11" }
+    steps:
+      - name: Checkout
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          persist-credentials: false
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1 # v5.4.0
+        with:
+          dotnet-version: ${{ matrix.sdk }}
+
+      - name: Restore
+        run: >
+          dotnet restore Jellyfin.Plugin.AudioTagger.sln
+          -p:TargetFrameworks=${{ matrix.framework }}
+          -p:JellyfinVersion=${{ matrix.package }}
+          -p:HostingAbstractionsVersion=${{ matrix.hosting }}
+
+      - name: Build
+        run: >
+          dotnet build Jellyfin.Plugin.AudioTagger.sln
+          --configuration Release
+          --no-restore
+          -p:TargetFrameworks=${{ matrix.framework }}
+          -p:JellyfinVersion=${{ matrix.package }}
+          -p:HostingAbstractionsVersion=${{ matrix.hosting }}
+
+      - name: Test
+        run: >
+          dotnet test Jellyfin.Plugin.AudioTagger.sln
+          --configuration Release
+          --no-build
+          --no-restore
+          -p:TargetFrameworks=${{ matrix.framework }}
+          -p:JellyfinVersion=${{ matrix.package }}
+          -p:HostingAbstractionsVersion=${{ matrix.hosting }}
+
+  preview:
+    name: Jellyfin 12.0.0-rc3 preview canary
+    continue-on-error: true
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          persist-credentials: false
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1 # v5.4.0
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Build and test preview API
+        run: >
+          dotnet test Jellyfin.Plugin.AudioTagger.sln
+          --configuration Release
+          -p:TargetFrameworks=net10.0
+          -p:JellyfinVersion=12.0.0-rc3
+          -p:HostingAbstractionsVersion=10.0.10
+          -p:TargetAbi=12.0.0.0
+          -p:Version=12.0.0.1

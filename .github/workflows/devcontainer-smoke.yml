@@ -41,8 +41,10 @@ jobs:
       
               command -v dotnet >/dev/null
               dotnet --info >/dev/null
-              dotnet restore
-              dotnet build --configuration Release
+              # The devcontainer installs .NET 9; the compatibility workflow covers both ABIs.
+              dotnet restore Jellyfin.Plugin.AudioTagger.sln -p:TargetFrameworks=net9.0
+              dotnet build Jellyfin.Plugin.AudioTagger.sln --configuration Release --no-restore -p:TargetFrameworks=net9.0
+              dotnet test Jellyfin.Plugin.AudioTagger.sln --configuration Release --no-build --no-restore -p:TargetFrameworks=net9.0
       
               if [ -S /var/run/docker.sock ]; then
                 docker version >/dev/null 2>&1 || true

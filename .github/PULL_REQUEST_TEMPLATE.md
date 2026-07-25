@@ -18,6 +18,8 @@ Fixes #0000 | Relates #0000
 
 - [ ] Unit tests updated
 - [ ] End user documentation updated
+- [ ] Jellyfin compatibility matrix passes
+- [ ] Release metadata and package checksums validated (when packaging changes)
 
 ### Community Note
 
