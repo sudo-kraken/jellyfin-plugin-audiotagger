@@ -32,24 +32,36 @@ public class AudioAnalysisService
     /// </summary>
     /// <param name="movie">The movie to analyze.</param>
     /// <param name="config">Plugin configuration.</param>
-    /// <returns>A list of audio tags to add.</returns>
+    /// <returns>A list of audio tags to apply.</returns>
     public List<string> AnalyzeAudioStreams(Movie movie, PluginConfiguration config)
     {
-        var allTags = new HashSet<string>();
+        var allTags = new HashSet<string>(StringComparer.Ordinal);
+        var mediaSources = movie.GetMediaSources(false)?.ToList();
 
-        if (movie.GetMediaSources(false) == null || !movie.GetMediaSources(false).Any())
+        if (mediaSources is null || mediaSources.Count == 0)
         {
-            _logger.LogDebug("No media sources found for movie: {MovieName}", movie.Name);
+            if (config.VerboseLogging)
+            {
+                _logger.LogInformation("No media sources found for movie: {MovieName}", movie.Name);
+            }
+
             return new List<string>();
         }
 
-        foreach (var mediaSource in movie.GetMediaSources(false))
+        foreach (var mediaSource in mediaSources)
         {
             var audioStreams = mediaSource.MediaStreams?.Where(s => s.Type == MediaStreamType.Audio) ?? Enumerable.Empty<MediaStream>();
-            
+
             foreach (var stream in audioStreams)
             {
-                var streamTags = DetermineTagsForStream(stream, config);
+                var streamTags = AudioStreamTagClassifier.Classify(
+                    stream.Channels,
+                    stream.Codec,
+                    stream.Title,
+                    stream.Profile,
+                    config.MinimumChannels,
+                    config.OnlyMultichannelAudio);
+
                 foreach (var tag in streamTags)
                 {
                     allTags.Add(tag);
@@ -58,9 +70,10 @@ public class AudioAnalysisService
                 if (config.VerboseLogging)
                 {
                     _logger.LogInformation(
-                        "Movie: {MovieName}, Stream: {Codec} {Channels}ch '{Title}' -> Tags: {Tags}",
+                        "Movie: {MovieName}, Stream: codec={Codec}, profile={Profile}, channels={Channels}, title='{Title}' -> Tags: {Tags}",
                         movie.Name,
                         stream.Codec ?? "Unknown",
+                        stream.Profile ?? "Unknown",
                         stream.Channels ?? 0,
                         stream.Title ?? "",
                         string.Join(", ", streamTags));
@@ -69,7 +82,7 @@ public class AudioAnalysisService
         }
 
         var result = allTags.ToList();
-        result.Sort(); // Sort alphabetically for consistency
+        result.Sort(StringComparer.Ordinal);
 
         if (config.VerboseLogging)
         {
@@ -77,68 +90,5 @@ public class AudioAnalysisService
         }
 
         return result;
-    }
-
-    /// <summary>
-    /// Determines tags for a single audio stream.
-    /// </summary>
-    /// <param name="stream">The audio stream to analyze.</param>
-    /// <param name="config">Plugin configuration.</param>
-    /// <returns>A list of tags for this stream.</returns>
-    private List<string> DetermineTagsForStream(MediaStream stream, PluginConfiguration config)
-    {
-        var tags = new HashSet<string>();
-        var channels = stream.Channels ?? 0;
-        var title = (stream.Title ?? string.Empty).ToLowerInvariant();
-        var codec = (stream.Codec ?? string.Empty).ToLowerInvariant();
-
-        // Skip streams that don't meet minimum channel requirement
-        if (config.OnlyMultichannelAudio && channels < config.MinimumChannels)
-        {
-            return new List<string>();
-        }
-
-        // Channel layout tags (only for multichannel)
-        if (channels == 6) tags.Add("_5.1");
-        else if (channels == 8) tags.Add("_7.1");
-        else if (channels == 10) tags.Add("_7.1.2");
-
-        // Only add codec and quality tags if we have channel layout tags
-        if (tags.Any())
-        {
-            // Codec tags
-            if (codec.Contains("eac3")) tags.Add("_EAC3");
-            else if (codec.Contains("ac3")) tags.Add("_AC3");
-            else if (codec.Contains("truehd")) tags.Add("_TrueHD");
-            else if (codec.Contains("dts"))
-            {
-                tags.Add("_DTS");
-                if (title.Contains("dts-hd") || title.Contains("dts hd"))
-                {
-                    tags.Add("_DTS-HD_MA");
-                }
-            }
-            else if (codec.Contains("pcm")) tags.Add("_LPCM");
-            else if (codec.Contains("opus")) tags.Add("_Opus");
-
-            // Object-based audio tags
-            if (title.Contains("atmos")) tags.Add("_Atmos");
-            if (title.Contains("dts:x") || title.Contains("dtsx")) tags.Add("_DTSX");
-
-            // Special tags
-            if (title.Contains("imax")) tags.Add("_IMAX");
-
-            // Quality tags (only if we have other tags)
-            if (tags.Any(t => t is "_TrueHD" or "_DTS-HD_MA" or "_LPCM"))
-            {
-                tags.Add("_Lossless");
-            }
-            else if (tags.Any())
-            {
-                tags.Add("_Lossy");
-            }
-        }
-
-        return tags.ToList();
     }
 }

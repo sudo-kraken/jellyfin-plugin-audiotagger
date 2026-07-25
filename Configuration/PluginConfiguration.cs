@@ -1,4 +1,3 @@
-using System;
 using System.Collections.Generic;
 using MediaBrowser.Model.Plugins;
 
@@ -27,10 +26,10 @@ public class PluginConfiguration : BasePluginConfiguration
     /// <summary>
     /// Gets or sets the list of library names to monitor.
     /// </summary>
-    public List<string> MonitoredLibraries { get; set; } = new List<string> { "Test Movies" };
+    public List<string> MonitoredLibraries { get; set; } = new();
 
     /// <summary>
     /// Gets or sets a value indicating whether to log detailed information.
     /// </summary>
-    public bool VerboseLogging { get; set; } = true;
+    public bool VerboseLogging { get; set; }
 }

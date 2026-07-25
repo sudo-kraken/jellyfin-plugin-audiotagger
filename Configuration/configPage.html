@@ -35,7 +35,7 @@
 
                     <div class="inputContainer">
                         <label class="inputLabel inputLabelUnfocused" for="txtMinChannels">Minimum Channels</label>
-                        <input id="txtMinChannels" type="number" is="emby-input" min="2" max="12" step="1" />
+                        <input id="txtMinChannels" type="number" is="emby-input" min="1" max="32" step="1" />
                         <div class="fieldDescription">
                             Minimum number of audio channels required to add tags (e.g., 6 for 5.1+, 2 for stereo+).
                         </div>
@@ -86,16 +86,21 @@
         <script type="text/javascript">
             (function () {
                 var pluginId = "33fc255a-be9b-11ef-993c-272469e0c801";
+                var currentConfig = null;
 
                 document.querySelector('#AudioTaggerConfigPage')
                     .addEventListener('pageshow', function () {
                         Dashboard.showLoadingMsg();
                         ApiClient.getPluginConfiguration(pluginId).then(function (config) {
+                            currentConfig = config;
                             document.querySelector('#chkEnabled').checked = config.Enabled || false;
                             document.querySelector('#chkOnlyMultichannel').checked = config.OnlyMultichannelAudio !== false;
                             document.querySelector('#txtMinChannels').value = config.MinimumChannels || 6;
-                            document.querySelector('#txtLibraries').value = (config.MonitoredLibraries || ["Movies", "Movies (4k)"]).join(", ");
+                            document.querySelector('#txtLibraries').value = (config.MonitoredLibraries || []).join(", ");
                             document.querySelector('#chkVerboseLogging').checked = config.VerboseLogging || false;
+                            Dashboard.hideLoadingMsg();
+                        }).catch(function (error) {
+                            console.error('Unable to load Audio Tagger configuration', error);
                             Dashboard.hideLoadingMsg();
                         });
                     });
@@ -104,16 +109,18 @@
                     Dashboard.showLoadingMsg();
                     e.preventDefault();
 
-                    var config = {
-                        Enabled: document.querySelector('#chkEnabled').checked,
-                        OnlyMultichannelAudio: document.querySelector('#chkOnlyMultichannel').checked,
-                        MinimumChannels: parseInt(document.querySelector('#txtMinChannels').value) || 6,
-                        MonitoredLibraries: document.querySelector('#txtLibraries').value.split(',').map(function(s) { return s.trim(); }).filter(function(s) { return s; }),
-                        VerboseLogging: document.querySelector('#chkVerboseLogging').checked
-                    };
+                    var config = currentConfig || {};
+                    config.Enabled = document.querySelector('#chkEnabled').checked;
+                    config.OnlyMultichannelAudio = document.querySelector('#chkOnlyMultichannel').checked;
+                    config.MinimumChannels = parseInt(document.querySelector('#txtMinChannels').value, 10) || 6;
+                    config.MonitoredLibraries = document.querySelector('#txtLibraries').value.split(',').map(function(s) { return s.trim(); }).filter(function(s) { return s; });
+                    config.VerboseLogging = document.querySelector('#chkVerboseLogging').checked;
 
                     ApiClient.updatePluginConfiguration(pluginId, config).then(function () {
                         Dashboard.processPluginConfigurationUpdateResult();
+                    }).catch(function (error) {
+                        console.error('Unable to save Audio Tagger configuration', error);
+                        Dashboard.hideLoadingMsg();
                     });
 
                     return false;

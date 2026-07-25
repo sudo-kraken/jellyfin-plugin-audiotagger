@@ -1,0 +1,20 @@
+<Project>
+  <PropertyGroup>
+    <AudioTaggerBuildNumber>1</AudioTaggerBuildNumber>
+    <TargetFrameworks Condition="'$(TargetFrameworks)' == ''">net8.0;net9.0</TargetFrameworks>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(TargetFramework)' == 'net8.0'">
+    <JellyfinVersion Condition="'$(JellyfinVersion)' == ''">10.10.6</JellyfinVersion>
+    <HostingAbstractionsVersion Condition="'$(HostingAbstractionsVersion)' == ''">8.0.1</HostingAbstractionsVersion>
+    <TargetAbi Condition="'$(TargetAbi)' == ''">10.10.6.0</TargetAbi>
+    <Version Condition="'$(Version)' == ''">10.10.6.$(AudioTaggerBuildNumber)</Version>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(TargetFramework)' == 'net9.0'">
+    <JellyfinVersion Condition="'$(JellyfinVersion)' == ''">10.11.0</JellyfinVersion>
+    <HostingAbstractionsVersion Condition="'$(HostingAbstractionsVersion)' == ''">9.0.10</HostingAbstractionsVersion>
+    <TargetAbi Condition="'$(TargetAbi)' == ''">10.11.0.0</TargetAbi>
+    <Version Condition="'$(Version)' == ''">10.11.0.$(AudioTaggerBuildNumber)</Version>
+  </PropertyGroup>
+</Project>

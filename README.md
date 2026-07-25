@@ -8,8 +8,8 @@ _An automatic audio tagging plugin for Jellyfin that analyses movie audio stream
 
 <div align="center">
 
-[![Jellyfin Version](https://img.shields.io/badge/Jellyfin-10.9.0%2B-blue?style=for-the-badge)](https://jellyfin.org/)
-[![.NET](https://img.shields.io/badge/.NET-8.0%2B-512BD4?logo=dotnet&logoColor=white&style=for-the-badge)](https://dotnet.microsoft.com/)
+[![Jellyfin Version](https://img.shields.io/badge/Jellyfin-10.10.6%E2%80%9310.11.11-blue?style=for-the-badge)](https://jellyfin.org/)
+[![.NET](https://img.shields.io/badge/.NET-8.0%20%7C%209.0-512BD4?logo=dotnet&logoColor=white&style=for-the-badge)](https://dotnet.microsoft.com/)
 
 [![OpenSSF Scorecard](https://img.shields.io/ossf-scorecard/github.com/sudo-kraken/jellyfin-plugin-audiotagger?label=openssf%20scorecard&style=for-the-badge)](https://scorecard.dev/viewer/?uri=github.com/sudo-kraken/jellyfin-plugin-audiotagger)
 
@@ -38,7 +38,7 @@ _An automatic audio tagging plugin for Jellyfin that analyses movie audio stream
 
 ## Overview
 
-Audio Tagger watches your selected libraries and automatically adds tags to films, based on the audio streams it finds. It never edits other metadata and is safe to enable on existing libraries.
+Audio Tagger watches your selected libraries and automatically reconciles audio tags on films based on the streams it finds. It preserves tags it does not own and is safe to enable on existing libraries.
 
 ## Architecture at a glance
 
@@ -54,7 +54,7 @@ Audio Tagger watches your selected libraries and automatically adds tags to film
 - **Smart analysis**: inspects all audio streams for a title
 - **Comprehensive tags**: channel layout, codec, quality and special formats
 - **Configurable**: select libraries, minimum channels and multichannel-only mode
-- **Safe**: only adds tags; does not alter other metadata
+- **Safe reconciliation**: removes stale Audio Tagger tags while preserving unrelated tags and metadata
 
 ## Generated tags
 
@@ -77,8 +77,8 @@ Audio Tagger watches your selected libraries and automatically adds tags to film
 - `_DTSX` DTS:X
 
 ### Quality indicators
-- `_Lossless` TrueHD, DTS-HD MA, LPCM
-- `_Lossy` all other formats
+- `_Lossless` TrueHD, DTS-HD MA, LPCM and recognised lossless codecs
+- `_Lossy` recognised lossy codecs
 
 ### Special formats
 - `_IMAX` IMAX Enhanced
@@ -107,9 +107,10 @@ Audio Tagger watches your selected libraries and automatically adds tags to film
 
 ### Method 2 Manual installation
 
-1. **Download the latest release**
+1. **Download the release asset for your Jellyfin ABI**
    - Go to the [Releases page](https://github.com/sudo-kraken/jellyfin-plugin-audiotagger/releases)
-   - Download `jellyfin-plugin-audiotagger_x.x.x.zip`
+   - Jellyfin 10.10: download the asset whose version starts with `10.10.6`
+   - Jellyfin 10.11: download the asset whose version starts with `10.11.0`
 
 2. **Extract to the plugins directory**
    - **Windows** `%ProgramData%\Jellyfin\Server\plugins\AudioTagger\`
@@ -133,8 +134,8 @@ Audio Tagger watches your selected libraries and automatically adds tags to film
 - Enabled `false`
 - Only multichannel `true`
 - Minimum channels `6` 5.1+
-- Monitored libraries `Test Movies`
-- Verbose logging `true`
+- Monitored libraries none
+- Verbose logging `false`
 
 ## Examples
 
@@ -162,22 +163,38 @@ Tags: _7.1, _5.1, _DTS, _DTS-HD_MA, _AC3, _Lossless, _Lossy
 
 ## Development
 
-Build from source:
+Install the .NET 8 and .NET 9 SDKs, then build and test both ABI variants:
 
 ```bash
 git clone https://github.com/sudo-kraken/jellyfin-plugin-audiotagger.git
 cd jellyfin-plugin-audiotagger
-# Requires .NET 8 SDK
-dotnet build --configuration Release
+dotnet restore Jellyfin.Plugin.AudioTagger.sln
+dotnet build Jellyfin.Plugin.AudioTagger.sln --configuration Release --no-restore
+dotnet test Jellyfin.Plugin.AudioTagger.sln --configuration Release --no-build --no-restore
 ```
 
-Copy files from `bin/Release/net8.0/` to your Jellyfin plugins directory.
+The plugin DLLs are written to `bin/Release/net8.0/` and `bin/Release/net9.0/`.
+Do not copy Jellyfin or Microsoft.Extensions assemblies into the plugin directory.
+On Windows, `build.bat` also runs the tests and creates both validated ZIPs and
+their checksums under `release/v<version>/`.
 
 ## Compatibility
 
-- **Jellyfin** 10.9.0+
-- **.NET** 8.0
-- **Platforms** Windows, Linux, macOS and Docker
+Jellyfin changed a binary API and its runtime between 10.10 and 10.11, so one
+DLL cannot safely support both lines. Releases contain distinct artifacts and
+the plugin catalog selects the highest compatible one.
+
+| Jellyfin Server | Plugin target | Runtime | Verification |
+| --- | --- | --- | --- |
+| 10.10.6–10.10.7 | `10.10.6.x` / ABI `10.10.6.0` | .NET 8 | API build + unit tests |
+| 10.11.0–10.11.11 | `10.11.0.x` / ABI `10.11.0.0` | .NET 9 | API build + unit tests |
+| 12.0 previews | No release artifact | .NET 10 | CI canary only |
+
+Every published stable Jellyfin version in the tested ranges is covered by the
+API compatibility build matrix. Preview releases are not supported until their
+ABI is stable.
+
+Supported platforms are Windows, Linux, macOS and Docker.
 
 ## Troubleshooting
 
@@ -188,11 +205,11 @@ Copy files from `bin/Release/net8.0/` to your Jellyfin plugins directory.
 
 ## Licence
 
-This project is licensed under the MIT Licence. See the [LICENCE](LICENCE) file for details.
+This project is licensed under the MIT Licence. See the [LICENSE](LICENSE) file for details.
 
 ## Security
 
-If you discover a security issue, please review and follow the guidance in [SECURITY.md](SECURITY.md), or open a private security-focused issue with minimal details and request a secure contact channel.
+If you discover a security issue, follow the private reporting guidance in [SECURITY.md](SECURITY.md).
 
 ## Contributing
 

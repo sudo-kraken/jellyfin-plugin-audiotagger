@@ -23,5 +23,16 @@
       groupName: "Jellyfin packages",
       automerge: false,
     },
+    {
+      // These versions must move together with the target framework, ABI,
+      // release metadata, and compatibility matrix.
+      matchManagers: ["nuget"],
+      matchPackageNames: [
+        "Jellyfin.Controller",
+        "Jellyfin.Model",
+        "Microsoft.Extensions.Hosting.Abstractions",
+      ],
+      enabled: false,
+    },
   ],
 }

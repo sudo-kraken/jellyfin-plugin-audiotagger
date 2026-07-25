@@ -19,6 +19,6 @@ This repository contains the Audio Tagger plugin for Jellyfin.
 - **Name**: Audio Tagger
 - **Description**: Automatically adds audio format tags to movies based on their audio streams
 - **Category**: Metadata
-- **Compatibility**: Jellyfin 10.9.0+
+- **Compatibility**: Jellyfin 10.10.6–10.11.11 using ABI-specific release assets
 
 For full documentation, see the [README](README.md).

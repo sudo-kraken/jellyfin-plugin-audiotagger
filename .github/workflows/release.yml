@@ -10,10 +10,53 @@ permissions:
   contents: read
 
 concurrency:
-  group: release-${{ github.ref }}
-  cancel-in-progress: true
+  group: release-${{ github.repository }}
+  cancel-in-progress: false
 
 jobs:
+  validate-release:
+    name: Validate release tag
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          persist-credentials: false
+
+      - name: Setup .NET 9
+        uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1 # v5.4.0
+        with:
+          dotnet-version: 9.0.x
+
+      - name: Require tag to match the current ABI package version
+        shell: pwsh
+        run: |
+          $versionOutput = @(
+            dotnet msbuild Jellyfin.Plugin.AudioTagger.csproj `
+              -nologo `
+              -getProperty:Version `
+              -property:TargetFramework=net9.0
+          )
+          if ($LASTEXITCODE -ne 0) {
+            throw 'Unable to read the net9.0 plugin version.'
+          }
+          $version = (
+            $versionOutput |
+              Where-Object { -not [string]::IsNullOrWhiteSpace($_) } |
+              Select-Object -Last 1
+          )
+          if ([string]::IsNullOrWhiteSpace($version)) {
+            throw 'The net9.0 plugin version is empty.'
+          }
+          $version = $version.Trim()
+
+          $expectedTag = "v$version"
+          if ($env:GITHUB_REF_NAME -cne $expectedTag) {
+            throw "Release tag '$env:GITHUB_REF_NAME' must be '$expectedTag' for the net9.0 package."
+          }
+
   changelog:
     name: Generate changelog
     runs-on: ubuntu-24.04
@@ -41,91 +84,182 @@ jobs:
   create-draft-release:
     name: Create draft release
     runs-on: ubuntu-24.04
-    needs: changelog
+    needs: [validate-release, changelog]
     permissions:
       contents: write
     steps:
-      - name: Checkout
-        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
-        with:
-          persist-credentials: false
-
-      - name: Draft Release
-        run: gh release create ${GITHUB_REF_NAME} -t "Release ${GITHUB_REF_NAME}" -n "${RELEASE_BODY}" --draft
+      - name: Create or refresh draft release
+        shell: bash
+        run: |
+          if gh release view "${GITHUB_REF_NAME}" --repo "${GITHUB_REPOSITORY}" >/dev/null 2>&1; then
+            gh release edit "${GITHUB_REF_NAME}" \
+              --repo "${GITHUB_REPOSITORY}" \
+              --draft \
+              --title "Release ${GITHUB_REF_NAME}" \
+              --notes "${RELEASE_BODY}"
+          else
+            gh release create "${GITHUB_REF_NAME}" \
+              --repo "${GITHUB_REPOSITORY}" \
+              --draft \
+              --title "Release ${GITHUB_REF_NAME}" \
+              --notes "${RELEASE_BODY}"
+          fi
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           RELEASE_BODY: ${{ needs.changelog.outputs.release_body }}
 
   prepare-artifacts:
-    name: Prepare release artifacts
-    needs: create-draft-release
+    name: Build and package ${{ matrix.tfm }}
+    needs: [create-draft-release, changelog]
     runs-on: ubuntu-24.04
     permissions:
       contents: read
-    env:
-      VERSION: ${{ github.ref_name }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - tfm: net8.0
+            sdk: 8.0.x
+          - tfm: net9.0
+            sdk: 9.0.x
     steps:
       - name: Checkout
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
           persist-credentials: false
 
-      - name: Setup .NET
+      - name: Setup .NET ${{ matrix.sdk }}
         uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1 # v5.4.0
-
         with:
-          dotnet-version: 8.0.x
+          dotnet-version: ${{ matrix.sdk }}
 
-      - name: Extract version
-        id: version
+      - name: Install Trivy
+        uses: aquasecurity/setup-trivy@81e514348e19b6112ce2a7e3ecbafe19c1e1f567 # v0.3.1
+
+      - name: Restore ${{ matrix.tfm }}
+        shell: pwsh
         run: |
-          VERSION_NUM=${GITHUB_REF_NAME#v}
-          echo "VERSION=$VERSION_NUM" >> $GITHUB_OUTPUT
+          dotnet restore Jellyfin.Plugin.AudioTagger.sln `
+            -property:TargetFrameworks=${{ matrix.tfm }}
+          if ($LASTEXITCODE -ne 0) {
+            throw 'Solution restore failed.'
+          }
 
-      - name: Restore dependencies
-        run: dotnet restore
+          dotnet restore Jellyfin.Plugin.AudioTagger.csproj `
+            --force-evaluate `
+            -property:TargetFrameworks=${{ matrix.tfm }} `
+            -property:RestorePackagesWithLockFile=true `
+            -property:NuGetLockFilePath=obj/packages.${{ matrix.tfm }}.lock.json
+          if ($LASTEXITCODE -ne 0) {
+            throw 'Plugin lock-file restore failed.'
+          }
 
-      - name: Build
-        run: dotnet build --no-restore --configuration Release
+      - name: Build ${{ matrix.tfm }}
+        shell: pwsh
+        run: >
+          dotnet build Jellyfin.Plugin.AudioTagger.sln
+          --configuration Release
+          --no-restore
+          -property:TargetFrameworks=${{ matrix.tfm }}
 
-      - name: Package Plugin
+      - name: Test ${{ matrix.tfm }}
+        shell: pwsh
+        run: >
+          dotnet test Jellyfin.Plugin.AudioTagger.sln
+          --configuration Release
+          --no-build
+          --no-restore
+          -property:TargetFrameworks=${{ matrix.tfm }}
+
+      - name: Package and validate ${{ matrix.tfm }}
+        shell: pwsh
+        env:
+          RELEASE_CHANGELOG: ${{ needs.changelog.outputs.release_body }}
         run: |
-          VERSION_NUM=${{ steps.version.outputs.VERSION }}
-          ARTIFACT_NAME="jellyfin-plugin-audiotagger_${VERSION_NUM}"
-          
-          mkdir -p release
-          mkdir -p "${ARTIFACT_NAME}"
-          cp bin/Release/net8.0/Jellyfin.Plugin.AudioTagger.dll "${ARTIFACT_NAME}/"
-          cp meta.json "${ARTIFACT_NAME}/"
-          
-          zip -r "release/${ARTIFACT_NAME}.zip" "${ARTIFACT_NAME}/"
-          
-          # Create checksums
-          cd release
-          sha256sum ${ARTIFACT_NAME}.zip > ${ARTIFACT_NAME}.zip.sha256
-          sha512sum ${ARTIFACT_NAME}.zip > ${ARTIFACT_NAME}.zip.sha512
+          ./scripts/New-PluginPackage.ps1 `
+            -ProjectPath Jellyfin.Plugin.AudioTagger.csproj `
+            -TargetFramework '${{ matrix.tfm }}' `
+            -DllPath 'bin/Release/${{ matrix.tfm }}/Jellyfin.Plugin.AudioTagger.dll' `
+            -OutputDirectory 'release-${{ matrix.tfm }}' `
+            -Repository '${{ github.repository }}' `
+            -ReleaseTag '${{ github.ref_name }}' `
+            -Changelog $env:RELEASE_CHANGELOG `
+            -NuGetLockPath 'obj/packages.${{ matrix.tfm }}.lock.json' `
+            -GenerateSbom
 
-      - name: Upload artifacts
+      - name: Upload ${{ matrix.tfm }} artifacts
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: release-artifacts-${{ env.VERSION }}
-          path: release/*
+          name: release-artifacts-${{ matrix.tfm }}-${{ github.ref_name }}
+          path: release-${{ matrix.tfm }}/*
           if-no-files-found: error
           retention-days: 1
 
   sign:
-    if: startsWith(github.ref, 'refs/tags/')
-    name: Sign artifacts and create SBOM attestation
+    name: Sign packages and SBOMs
     needs: prepare-artifacts
     runs-on: ubuntu-24.04
     permissions:
       contents: read
       id-token: write
     env:
-      VERSION: ${{ github.ref_name }}
       COSIGN_YES: 'true'
     steps:
-      - name: Checkout
+      - name: Install Cosign
+        uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+
+      - name: Download net8.0 artifacts
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: release-artifacts-net8.0-${{ github.ref_name }}
+          path: release
+
+      - name: Download net9.0 artifacts
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: release-artifacts-net9.0-${{ github.ref_name }}
+          path: release
+
+      - name: Sign every package and SBOM
+        shell: pwsh
+        run: |
+          $null = New-Item -ItemType Directory -Path signatures
+          $files = @(
+            Get-ChildItem -LiteralPath release -File |
+              Where-Object { $_.Name.EndsWith('.zip') -or $_.Name.EndsWith('.sbom.cdx.json') }
+          )
+          if (@($files | Where-Object Name -Like '*.zip').Count -ne 2) {
+            throw 'Expected exactly two plugin ZIPs to sign.'
+          }
+          if (@($files | Where-Object Name -Like '*.sbom.cdx.json').Count -ne 2) {
+            throw 'Expected exactly two SBOMs to sign.'
+          }
+
+          foreach ($file in $files) {
+            cosign sign-blob `
+              --bundle "signatures/$($file.Name).bundle" `
+              $file.FullName
+            if ($LASTEXITCODE -ne 0) {
+              throw "Cosign failed to sign '$($file.Name)'."
+            }
+          }
+
+      - name: Upload signature bundles
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: signature-bundles-${{ github.ref_name }}
+          path: signatures/*
+          if-no-files-found: error
+          retention-days: 1
+
+  verify:
+    name: Verify release artifacts
+    needs: [prepare-artifacts, sign]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout validation scripts
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
           persist-credentials: false
@@ -133,173 +267,229 @@ jobs:
       - name: Install Cosign
         uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
 
-      - name: Install Trivy
-        uses: aquasecurity/setup-trivy@81e514348e19b6112ce2a7e3ecbafe19c1e1f567 # v0.3.1
-
-      - name: Download artifacts
+      - name: Download net8.0 artifacts
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
-          name: release-artifacts-${{ env.VERSION }}
+          name: release-artifacts-net8.0-${{ github.ref_name }}
           path: release
 
-      - name: Extract version number
-        id: version
-        run: |
-          VERSION_NUM=${GITHUB_REF_NAME#v}
-          echo "VERSION_NUM=$VERSION_NUM" >> $GITHUB_OUTPUT
-
-      - name: Generate SBOM with Trivy
-        run: |
-          trivy fs --format cyclonedx --output jellyfin-plugin-audiotagger-${{ steps.version.outputs.VERSION_NUM }}.sbom.json .
-
-      - name: Sign release artifacts
-        run: |
-          cd release
-          
-          # Sign the zip file
-          cosign sign-blob \
-            --bundle jellyfin-plugin-audiotagger_${{ steps.version.outputs.VERSION_NUM }}.zip.bundle \
-            jellyfin-plugin-audiotagger_${{ steps.version.outputs.VERSION_NUM }}.zip
-
-      - name: Sign SBOM
-        run: |
-          # Sign the SBOM file
-          cosign sign-blob \
-            --bundle jellyfin-plugin-audiotagger-${{ steps.version.outputs.VERSION_NUM }}.sbom.bundle \
-            jellyfin-plugin-audiotagger-${{ steps.version.outputs.VERSION_NUM }}.sbom.json
-
-      - name: Upload signed artifacts
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: signed-artifacts-${{ env.VERSION }}
-          path: |
-            release/*.bundle
-            *.sbom.json
-            *.bundle
-          if-no-files-found: error
-          retention-days: 1
-
-  verify:
-    name: Verify signatures and attestation
-    needs: [prepare-artifacts, sign]
-    runs-on: ubuntu-24.04
-    permissions:
-      contents: read
-    env:
-      VERSION: ${{ github.ref_name }}
-    steps:
-      - name: Install Cosign
-        uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
-
-      - name: Download release artifacts
+      - name: Download net9.0 artifacts
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
-          name: release-artifacts-${{ env.VERSION }}
+          name: release-artifacts-net9.0-${{ github.ref_name }}
           path: release
 
-      - name: Download signed artifacts
+      - name: Download signature bundles
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
-          name: signed-artifacts-${{ env.VERSION }}
-          path: signed
+          name: signature-bundles-${{ github.ref_name }}
+          path: signatures
 
-      - name: Extract version number
-        id: version
+      - name: Validate package contents, checksums, catalog entries, and SBOMs
+        shell: pwsh
         run: |
-          VERSION_NUM=${GITHUB_REF_NAME#v}
-          echo "VERSION_NUM=$VERSION_NUM" >> $GITHUB_OUTPUT
+          $packages = @(Get-ChildItem -LiteralPath release -Filter '*.zip' -File)
+          if ($packages.Count -ne 2) {
+            throw 'Expected exactly two plugin ZIPs to validate.'
+          }
 
-      - name: Verify signatures
+          foreach ($package in $packages) {
+            $stem = [System.IO.Path]::GetFileNameWithoutExtension($package.Name)
+            ./scripts/New-PluginPackage.ps1 `
+              -ValidatePackage $package.FullName `
+              -SbomPath "release/$stem.sbom.cdx.json"
+          }
+
+      - name: Verify every package and SBOM signature
+        shell: pwsh
         run: |
-          cosign verify-blob \
-            --bundle signed/release/jellyfin-plugin-audiotagger_${{ steps.version.outputs.VERSION_NUM }}.zip.bundle \
-            --certificate-identity "https://github.com/${{ github.workflow_ref }}" \
-            --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
-            release/jellyfin-plugin-audiotagger_${{ steps.version.outputs.VERSION_NUM }}.zip
+          $identity = 'https://github.com/${{ github.workflow_ref }}'
+          $files = @(
+            Get-ChildItem -LiteralPath release -File |
+              Where-Object { $_.Name.EndsWith('.zip') -or $_.Name.EndsWith('.sbom.cdx.json') }
+          )
+          if ($files.Count -ne 4) {
+            throw 'Expected two packages and two SBOMs to verify.'
+          }
 
-      - name: Verify SBOM signature
-        run: |
-          cosign verify-blob \
-            --bundle signed/jellyfin-plugin-audiotagger-${{ steps.version.outputs.VERSION_NUM }}.sbom.bundle \
-            --certificate-identity "https://github.com/${{ github.workflow_ref }}" \
-            --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
-            signed/jellyfin-plugin-audiotagger-${{ steps.version.outputs.VERSION_NUM }}.sbom.json
+          foreach ($file in $files) {
+            $bundle = "signatures/$($file.Name).bundle"
+            if (-not (Test-Path -LiteralPath $bundle -PathType Leaf)) {
+              throw "Signature bundle is missing for '$($file.Name)'."
+            }
 
-      - name: Verify checksums
-        run: |
-          cd release
-          sha256sum -c jellyfin-plugin-audiotagger_${{ steps.version.outputs.VERSION_NUM }}.zip.sha256
-          sha512sum -c jellyfin-plugin-audiotagger_${{ steps.version.outputs.VERSION_NUM }}.zip.sha512
+            cosign verify-blob `
+              --bundle $bundle `
+              --certificate-identity $identity `
+              --certificate-oidc-issuer 'https://token.actions.githubusercontent.com' `
+              $file.FullName
+            if ($LASTEXITCODE -ne 0) {
+              throw "Cosign failed to verify '$($file.Name)'."
+            }
+          }
 
-  publish-release:
-    name: Publish release
+  upload-draft-assets:
+    name: Upload verified assets to draft
     needs: [create-draft-release, verify]
     runs-on: ubuntu-24.04
     permissions:
       contents: write
-    env:
-      VERSION: ${{ github.ref_name }}
     steps:
-      - name: Download release artifacts
+      - name: Download net8.0 artifacts
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
-          name: release-artifacts-${{ env.VERSION }}
+          name: release-artifacts-net8.0-${{ github.ref_name }}
           path: release
 
-      - name: Download signed artifacts
+      - name: Download net9.0 artifacts
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
-          name: signed-artifacts-${{ env.VERSION }}
-          path: signed
+          name: release-artifacts-net9.0-${{ github.ref_name }}
+          path: release
 
-      - name: Upload artifacts to release
+      - name: Download signature bundles
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: signature-bundles-${{ github.ref_name }}
+          path: signatures
+
+      - name: Upload all release outputs
+        shell: bash
         run: |
-          gh release upload "${{ env.VERSION }}" release/* --repo "${{ github.repository }}"
-          gh release upload "${{ env.VERSION }}" signed/*.sbom.json signed/*.bundle --repo "${{ github.repository }}"
+          gh release upload "${GITHUB_REF_NAME}" \
+            release/* \
+            signatures/* \
+            --clobber \
+            --repo "${GITHUB_REPOSITORY}"
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Publish release
+  update-package-manifest:
+    name: Update package manifest on main
+    needs: upload-draft-assets
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          ref: main
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Download net8.0 catalog entry
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: release-artifacts-net8.0-${{ github.ref_name }}
+          path: generated-release
+
+      - name: Download net9.0 catalog entry
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: release-artifacts-net9.0-${{ github.ref_name }}
+          path: generated-release
+
+      - name: Merge generated catalog entries
+        shell: pwsh
         run: |
-          gh release edit "${{ env.VERSION }}" --draft=false --repo "${{ github.repository }}"
+          $entries = @(
+            Get-ChildItem -LiteralPath generated-release -Filter '*.manifest-entry.json' -File
+          )
+          if ($entries.Count -ne 2) {
+            throw 'Expected exactly two generated catalog entries.'
+          }
+
+          ./scripts/Update-PluginManifest.ps1 `
+            -ManifestPath manifest.json `
+            -EntryPath $entries.FullName
+
+      - name: Commit and push catalog update
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -- manifest.json
+          if git diff --cached --quiet; then
+            echo "Package manifest is already current."
+            exit 0
+          fi
+
+          git commit -m "Update plugin manifest for ${GITHUB_REF_NAME}"
+          git pull --rebase origin main
+          git push origin HEAD:main
+
+  publish-release:
+    name: Publish release
+    needs: update-package-manifest
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - name: Publish verified draft
+        shell: bash
+        run: gh release edit "${GITHUB_REF_NAME}" --draft=false --repo "${GITHUB_REPOSITORY}"
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   discord:
-    name: Send Discord Notification
-    needs: publish-release
+    name: Send Discord notification
+    needs: [publish-release, update-package-manifest]
     if: always()
     runs-on: ubuntu-24.04
     steps:
       - name: Determine status
         id: status
+        shell: bash
         run: |
-          case "${{ needs.publish-release.result }}" in
-            success)   echo "status=Success"   >> $GITHUB_OUTPUT; echo "colour=3066993"  >> $GITHUB_OUTPUT ;;
-            failure)   echo "status=Failure"   >> $GITHUB_OUTPUT; echo "colour=15158332" >> $GITHUB_OUTPUT ;;
-            cancelled) echo "status=Cancelled" >> $GITHUB_OUTPUT; echo "colour=10181046" >> $GITHUB_OUTPUT ;;
-            *)         echo "status=Skipped"   >> $GITHUB_OUTPUT; echo "colour=9807270"  >> $GITHUB_OUTPUT ;;
-          esac
+          if [[ "${{ needs.publish-release.result }}" == "success" && "${{ needs.update-package-manifest.result }}" == "success" ]]; then
+            echo "status=Success" >> "${GITHUB_OUTPUT}"
+            echo "colour=3066993" >> "${GITHUB_OUTPUT}"
+          elif [[ "${{ needs.publish-release.result }}" == "cancelled" || "${{ needs.update-package-manifest.result }}" == "cancelled" ]]; then
+            echo "status=Cancelled" >> "${GITHUB_OUTPUT}"
+            echo "colour=10181046" >> "${GITHUB_OUTPUT}"
+          else
+            echo "status=Failure" >> "${GITHUB_OUTPUT}"
+            echo "colour=15158332" >> "${GITHUB_OUTPUT}"
+          fi
 
       - name: Send notification
+        continue-on-error: true
+        shell: bash
         run: |
-          WEBHOOK="${{ secrets.DISCORD_WEBHOOK }}"
+          if [[ -z "${DISCORD_WEBHOOK}" ]]; then
+            echo "DISCORD_WEBHOOK is not configured; skipping notification."
+            exit 0
+          fi
 
-          PAYLOAD=$(cat <<EOF
-          {
-            "embeds": [{
-              "title": "${{ steps.status.outputs.status }}: ${{ github.workflow }}",
-              "color": ${{ steps.status.outputs.colour }},
-              "fields": [
-                { "name": "Repository",   "value": "[${{ github.repository }}](${{ github.server_url }}/${{ github.repository }})", "inline": true },
-                { "name": "Ref",          "value": "${{ github.ref }}", "inline": true },
-                { "name": "Event",        "value": "${{ github.event_name }}", "inline": true },
-                { "name": "Triggered by", "value": "${{ github.actor }}", "inline": true },
-                { "name": "Workflow",     "value": "[${{ github.workflow }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})", "inline": true }
-              ]
-            }]
-          }
-          EOF
-          )
+          PAYLOAD=$(jq -n \
+            --arg title "${{ steps.status.outputs.status }}: ${{ github.workflow }}" \
+            --arg repository "${{ github.repository }}" \
+            --arg repository_url "${{ github.server_url }}/${{ github.repository }}" \
+            --arg ref "${{ github.ref }}" \
+            --arg event "${{ github.event_name }}" \
+            --arg actor "${{ github.actor }}" \
+            --arg workflow_url "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
+            --argjson colour "${{ steps.status.outputs.colour }}" \
+            '{
+              embeds: [{
+                title: $title,
+                color: $colour,
+                fields: [
+                  {name: "Repository", value: ("[" + $repository + "](" + $repository_url + ")"), inline: true},
+                  {name: "Ref", value: $ref, inline: true},
+                  {name: "Event", value: $event, inline: true},
+                  {name: "Triggered by", value: $actor, inline: true},
+                  {name: "Workflow", value: ("[Workflow run](" + $workflow_url + ")"), inline: true}
+                ]
+              }]
+            }')
 
-          curl -sS -H "Content-Type: application/json" -X POST -d "$PAYLOAD" "$WEBHOOK" || true
+          curl --fail-with-body --silent --show-error \
+            --header "Content-Type: application/json" \
+            --request POST \
+            --data "${PAYLOAD}" \
+            "${DISCORD_WEBHOOK}" ||
+            echo "Discord notification failed; the release result is unaffected."
+        env:
+          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
